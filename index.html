@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microlearning Storyboard Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        let apiKey = '';
+        let apiProvider = 'openai';
+        let syllabusData = null;
+        let storyboardData = null;
+        let isGenerating = false;
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="min-h-screen">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-purple-900 to-purple-800 text-white py-6 px-8 shadow-lg">
+                        <div class="max-w-7xl mx-auto">
+                            <h1 class="text-3xl font-bold">🎬 Microlearning Storyboard Generator</h1>
+                            <p class="text-purple-100 mt-1">Transform training syllabi into engaging micro-lessons</p>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto p-8">
+                        <!-- API Config -->
+                        <div class="bg-white rounded-lg shadow-md p-6 mb-6 border-l-4 border-purple-800">
+                            <h2 class="text-xl font-semibold mb-4">⚙️ API Configuration</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">AI Provider</label>
+                                    <select id="apiProvider" class="w-full px-4 py-2 border rounded-lg">
+                                        <option value="openai">OpenAI (GPT-4)</option>
+                                        <option value="anthropic">Anthropic (Claude)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">API Key *</label>
+                                    <input type="password" id="apiKey" placeholder="Enter your API key" 
+                                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-800">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Upload Section -->
+                        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                            <h2 class="text-xl font-semibold mb-4">📤 Step 1: Upload Syllabus JSON</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Upload JSON File</label>
+                                    <input type="file" id="fileUpload" accept=".json" 
+                                           class="w-full px-4 py-2 border rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Or Paste JSON</label>
+                                    <textarea id="jsonPaste" rows="4" placeholder="Paste syllabus JSON here..."
+                                              class="w-full px-4 py-2 border rounded-lg text-sm font-mono"></textarea>
+                                    <button onclick="loadPastedJSON()" 
+                                            class="mt-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                                        Load JSON
+                                    </button>
+                                </div>
+                            </div>
+                            ${syllabusData ? `
+                                <div class="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                    <div class="font-semibold text-green-800">✓ Syllabus Loaded: ${syllabusData.course_title}</div>
+                                    <p class="text-sm text-green-700 mt-1">
+                                        ${syllabusData.estimated_duration} | ${syllabusData.objectives?.length || 0} objectives
+                                    </p>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Generate Button -->
+                        ${syllabusData && !storyboardData ? `
+                            <button onclick="generateStoryboard()" 
+                                    ${isGenerating ? 'disabled' : ''}
+                                    class="w-full py-4 bg-gradient-to-r from-purple-900 to-purple-800 text-white rounded-lg font-semibold text-lg hover:from-purple-800 hover:to-purple-700 shadow-md disabled:opacity-50 mb-6">
+                                ${isGenerating ? '⏳ Generating Storyboard...' : '🎬 Generate Microlearning Storyboard'}
+                            </button>
+                        ` : ''}
+
+                        <!-- Storyboard Display -->
+                        ${storyboardData ? `
+                            <div class="space-y-6">
+                                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-purple-800">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h2 class="text-2xl font-bold text-purple-900">✓ Storyboard Generated</h2>
+                                            <p class="text-gray-600">${storyboardData.total_slides} slides | ${storyboardData.target_duration_seconds}s target</p>
+                                        </div>
+                                        <div class="flex gap-3">
+                                            <button onclick="downloadJSON()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                                ⬇️ JSON
+                                            </button>
+                                            <button onclick="downloadCSV()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                                                ⬇️ CSV
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="bg-purple-50 p-4 rounded">
+                                        <h3 class="font-semibold text-purple-900">${storyboardData.course_title}</h3>
+                                    </div>
+                                </div>
+
+                                ${storyboardData.slides.map((slide, idx) => `
+                                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-400">
+                                        <div class="flex items-center gap-3 mb-4">
+                                            <div class="bg-purple-100 text-purple-800 font-bold rounded-full w-10 h-10 flex items-center justify-center">
+                                                ${slide.slide_number}
+                                            </div>
+                                            <div>
+                                                <h3 class="text-lg font-semibold">${slide.title}</h3>
+                                                <p class="text-sm text-gray-500">Layout: ${slide.layout} | ${slide.duration_seconds}s</p>
+                                            </div>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <div>
+                                                <h4 class="text-sm font-semibold text-gray-700 mb-1">On-Screen Points:</h4>
+                                                <ul class="list-disc list-inside text-sm text-gray-700">
+                                                    ${slide.on_screen_points.map(p => `<li>${p}</li>`).join('')}
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-semibold text-gray-700 mb-1">Voiceover Script:</h4>
+                                                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded">${slide.script}</p>
+                                                <p class="text-xs text-gray-500 mt-1">Word count: ${slide.script.split(/\s+/).length}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+
+                                <div class="bg-white rounded-lg shadow-md p-6">
+                                    <h3 class="font-semibold text-gray-800 mb-3">Storyboard Summary</h3>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div class="bg-blue-50 p-4 rounded">
+                                            <div class="text-2xl font-bold text-blue-800">${storyboardData.slides.length}</div>
+                                            <div class="text-sm text-blue-600">Total Slides</div>
+                                        </div>
+                                        <div class="bg-green-50 p-4 rounded">
+                                            <div class="text-2xl font-bold text-green-800">
+                                                ${storyboardData.slides.reduce((s, sl) => s + sl.duration_seconds, 0)}s
+                                            </div>
+                                            <div class="text-sm text-green-600">Total Duration</div>
+                                        </div>
+                                        <div class="bg-purple-50 p-4 rounded">
+                                            <div class="text-2xl font-bold text-purple-800">
+                                                ${Math.round(storyboardData.slides.reduce((s, sl) => s + sl.duration_seconds, 0) / 60 * 10) / 10}m
+                                            </div>
+                                            <div class="text-sm text-purple-600">Minutes</div>
+                                        </div>
+                                        <div class="bg-orange-50 p-4 rounded">
+                                            <div class="text-2xl font-bold text-orange-800">
+                                                ${storyboardData.slides.reduce((s, sl) => s + sl.script.split(/\s+/).length, 0)}
+                                            </div>
+                                            <div class="text-sm text-orange-600">Total Words</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Attach event listeners
+            const apiProviderEl = document.getElementById('apiProvider');
+            const apiKeyEl = document.getElementById('apiKey');
+            const fileUploadEl = document.getElementById('fileUpload');
+
+            if (apiProviderEl) {
+                apiProviderEl.value = apiProvider;
+                apiProviderEl.onchange = (e) => {
+                    apiProvider = e.target.value;
+                };
+            }
+
+            if (apiKeyEl) {
+                apiKeyEl.value = apiKey;
+                apiKeyEl.oninput = (e) => {
+                    apiKey = e.target.value;
+                };
+            }
+
+            if (fileUploadEl) {
+                fileUploadEl.onchange = handleFileUpload;
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        syllabusData = JSON.parse(e.target.result);
+                        storyboardData = null;
+                        render();
+                    } catch (error) {
+                        alert('Error parsing JSON file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function loadPastedJSON() {
+            const jsonText = document.getElementById('jsonPaste').value;
+            if (!jsonText.trim()) {
+                alert('Please paste JSON first');
+                return;
+            }
+            try {
+                syllabusData = JSON.parse(jsonText);
+                storyboardData = null;
+                render();
+            } catch (error) {
+                alert('Error parsing JSON: ' + error.message);
+            }
+        }
+
+        async function generateStoryboard() {
+            if (!apiKey) {
+                alert('Please enter your API key');
+                return;
+            }
+
+            if (!syllabusData) {
+                alert('Please upload or paste a syllabus JSON');
+                return;
+            }
+
+            isGenerating = true;
+            render();
+
+            const prompt = `You are an instructional design expert creating micro-learning storyboards.
+
+Given this training syllabus, create a 3-5 minute micro-learning lesson storyboard.
+
+SYLLABUS:
+${JSON.stringify(syllabusData, null, 2)}
+
+REQUIREMENTS:
+- 8-12 slides total
+- 180-300 seconds total duration
+- 20-30 seconds per slide
+- 30-70 words on-screen per slide
+- 60-90 words script per slide
+- Natural conversational voiceover
+
+SLIDE STRUCTURE:
+1. Title - introduce course and audience
+2. Why it matters - 2 key points
+3. Objectives overview - list 3-4 objectives
+4-6. Individual objectives - one per slide with 2-3 key ideas
+7. Module highlights - 2-4 curriculum items
+8. Try it now - 3 practical steps
+9. Prerequisites (optional)
+10. Tools/Materials (optional)
+11. Recap - summarize objectives
+12. Call to action - next steps
+
+Return ONLY this JSON structure:
+{
+  "course_title": "from syllabus",
+  "target_duration_seconds": 240,
+  "total_slides": 10,
+  "slides": [
+    {
+      "slide_number": 1,
+      "id": "title",
+      "layout": "title",
+      "title": "slide title",
+      "on_screen_points": ["bullet 1", "bullet 2"],
+      "script": "natural voiceover 60-90 words",
+      "duration_seconds": 25
+    }
+  ]
+}`;
+
+            try {
+                let response;
+
+                if (apiProvider === 'openai') {
+                    response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            messages: [
+                                { role: 'system', content: 'You are an expert instructional designer. Always respond with valid JSON only.' },
+                                { role: 'user', content: prompt }
+                            ],
+                            temperature: 0.7
+                        })
+                    });
+                } else {
+                    response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey,
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 4096,
+                            messages: [{ role: 'user', content: prompt }]
+                        })
+                    });
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API Error ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                let content = apiProvider === 'openai' 
+                    ? data.choices[0].message.content 
+                    : data.content[0].text;
+
+                // Clean markdown
+                content = content.trim();
+                if (content.startsWith('```json')) {
+                    content = content.replace(/^```json\n/, '').replace(/\n```$/, '');
+                } else if (content.startsWith('```')) {
+                    content = content.replace(/^```\n/, '').replace(/\n```$/, '');
+                }
+
+                storyboardData = JSON.parse(content);
+                isGenerating = false;
+                render();
+            } catch (error) {
+                isGenerating = false;
+                alert(`Error: ${error.message}\n\nCheck:\n1. API key is correct\n2. You have credits available\n3. Network connection`);
+                render();
+            }
+        }
+
+        function downloadJSON() {
+            const blob = new Blob([JSON.stringify(storyboardData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Storyboard_${storyboardData.course_title.replace(/\s+/g, '_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadCSV() {
+            const headers = ['Slide #', 'Title', 'Layout', 'On-Screen Points', 'Script', 'Duration (sec)'];
+            const rows = storyboardData.slides.map(s => [
+                s.slide_number,
+                s.title,
+                s.layout,
+                s.on_screen_points.join(' | '),
+                s.script,
+                s.duration_seconds
+            ]);
+
+            const csv = [
+                headers.join(','),
+                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Storyboard_${storyboardData.course_title.replace(/\s+/g, '_')}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
