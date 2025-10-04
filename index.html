@@ -79,8 +79,8 @@
                             ` : ''}
                         </div>
 
-                        <!-- Topic Selection -->
-                        ${syllabusData && !generatedMissions.length ? `
+                        <!-- Topic Selection - Show even after generation -->
+                        ${syllabusData ? `
                             <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                                 <h2 class="text-xl font-semibold mb-4">✅ Step 2: Select Topics to Generate</h2>
                                 <p class="text-sm text-gray-600 mb-4">Select which curriculum topics to generate as missions (max 9 min each)</p>
@@ -422,6 +422,8 @@ CRITICAL: Return ONLY valid JSON, no other text.`;
             }
 
             isGenerating = false;
+            currentMissionIndex = 0;
+            // Keep syllabus, API key, and allow generating more missions
             render();
         }
 
