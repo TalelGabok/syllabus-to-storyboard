@@ -17,6 +17,8 @@
         let generatedMissions = [];
         let isGenerating = false;
         let currentMissionIndex = 0;
+        let editingMissionIndex = null;
+        let chatHistory = [];
 
         function render() {
             const app = document.getElementById('app');
@@ -135,6 +137,9 @@
                                                 <p class="text-sm text-gray-600 mt-1">${mission.slides?.length || 0} slides | Est. ${Math.round((mission.slides?.length || 0) * 37.5 / 60 * 10) / 10} min</p>
                                             </div>
                                             <div class="flex gap-2">
+                                                <button onclick="editMission(${idx})" class="px-3 py-1 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600">
+                                                    ✏️ Edit
+                                                </button>
                                                 <button onclick="downloadMissionJSON(${idx})" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
                                                     JSON
                                                 </button>
@@ -147,7 +152,80 @@
                                             </div>
                                         </div>
 
-                                        <div class="space-y-4">
+                                        ${editingMissionIndex === idx ? `
+                                            <!-- Edit Mode -->
+                                            <div class="space-y-4 bg-gray-50 p-4 rounded-lg">
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Mission Title</label>
+                                                    <input type="text" value="${mission.mission_title}" 
+                                                           onchange="updateMissionField(${idx}, 'mission_title', this.value)"
+                                                           class="w-full px-3 py-2 border rounded">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Introduction</label>
+                                                    <textarea rows="3" onchange="updateMissionField(${idx}, 'introduction', this.value)"
+                                                              class="w-full px-3 py-2 border rounded">${mission.introduction}</textarea>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-2">Slides</label>
+                                                    ${mission.slides.map((slide, si) => `
+                                                        <div class="mb-3 p-3 bg-white border rounded">
+                                                            <input type="text" value="${slide.title}" 
+                                                                   onchange="updateSlideField(${idx}, ${si}, 'title', this.value)"
+                                                                   class="w-full px-2 py-1 border rounded mb-2 font-medium"
+                                                                   placeholder="Slide Title">
+                                                            <textarea rows="2" onchange="updateSlideField(${idx}, ${si}, 'bullets', this.value.split('\\n'))"
+                                                                      class="w-full px-2 py-1 border rounded mb-2 text-sm"
+                                                                      placeholder="Bullets (one per line)">${slide.bullets.join('\n')}</textarea>
+                                                            <input type="text" value="${slide.voiceover_prompt}" 
+                                                                   onchange="updateSlideField(${idx}, ${si}, 'voiceover_prompt', this.value)"
+                                                                   class="w-full px-2 py-1 border rounded text-sm"
+                                                                   placeholder="Voice-over Prompt">
+                                                        </div>
+                                                    `).join('')}
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Chat Prompt</label>
+                                                    <input type="text" value="${mission.chat_prompt}" 
+                                                           onchange="updateMissionField(${idx}, 'chat_prompt', this.value)"
+                                                           class="w-full px-3 py-2 border rounded">
+                                                </div>
+                                                
+                                                <!-- AI Chat Assistant -->
+                                                <div class="border-t pt-4 mt-4">
+                                                    <div class="flex justify-between items-center mb-3">
+                                                        <h4 class="font-semibold">AI Assistant</h4>
+                                                        <button onclick="clearChat(${idx})" class="text-xs text-gray-500 hover:text-gray-700">Clear Chat</button>
+                                                    </div>
+                                                    <div id="chatHistory-${idx}" class="bg-white border rounded p-3 mb-3 max-h-60 overflow-y-auto">
+                                                        ${chatHistory.length === 0 ? '<p class="text-sm text-gray-500">Ask AI to help revise this mission...</p>' : 
+                                                          chatHistory.map(msg => `
+                                                            <div class="mb-2">
+                                                                <span class="text-xs font-semibold ${msg.role === 'user' ? 'text-blue-600' : 'text-green-600'}">
+                                                                    ${msg.role === 'user' ? 'You' : 'AI'}:
+                                                                </span>
+                                                                <p class="text-sm">${msg.content}</p>
+                                                            </div>
+                                                          `).join('')}
+                                                    </div>
+                                                    <div class="flex gap-2">
+                                                        <input type="text" id="chatInput-${idx}" 
+                                                               placeholder="e.g., Make slide 3 more concise"
+                                                               class="flex-1 px-3 py-2 border rounded text-sm"
+                                                               onkeypress="if(event.key==='Enter') sendChatMessage(${idx})">
+                                                        <button onclick="sendChatMessage(${idx})" 
+                                                                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
+                                                            Send
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <button onclick="editMission(null)" class="w-full py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                                                    Done Editing
+                                                </button>
+                                            </div>
+                                        ` : `
+                                            <!-- View Mode -->
                                             <div class="bg-gray-50 p-4 rounded">
                                                 <h4 class="font-semibold text-gray-800 mb-2">Introduction</h4>
                                                 <p class="text-sm text-gray-700">${mission.introduction}</p>
@@ -527,6 +605,89 @@ CRITICAL: Return ONLY valid JSON, no other text.`;
             a.download = `All_Missions_${syllabusData.course_title.replace(/\s+/g, '_')}.txt`;
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        function editMission(index) {
+            editingMissionIndex = index;
+            chatHistory = [];
+            render();
+        }
+
+        function updateMissionField(index, field, value) {
+            generatedMissions[index][field] = value;
+        }
+
+        function updateSlideField(index, slideIndex, field, value) {
+            generatedMissions[index].slides[slideIndex][field] = value;
+        }
+
+        function clearChat(index) {
+            chatHistory = [];
+            render();
+        }
+
+        async function sendChatMessage(index) {
+            const input = document.getElementById(`chatInput-${index}`);
+            const message = input.value.trim();
+            if (!message) return;
+
+            chatHistory.push({ role: 'user', content: message });
+            input.value = '';
+            render();
+
+            const mission = generatedMissions[index];
+            const prompt = `You are helping edit a training mission. The user wants to make changes.
+
+CURRENT MISSION:
+${JSON.stringify(mission, null, 2)}
+
+USER REQUEST: ${message}
+
+Provide the updated mission as valid JSON with the same structure. Make ONLY the changes requested. Return ONLY JSON, no explanation.`;
+
+            try {
+                let response;
+                if (apiProvider === 'openai') {
+                    response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            messages: [{ role: 'user', content: prompt }],
+                            temperature: 0.7
+                        })
+                    });
+                } else {
+                    response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey,
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 4096,
+                            messages: [{ role: 'user', content: prompt }]
+                        })
+                    });
+                }
+
+                const data = await response.json();
+                let content = apiProvider === 'openai' ? data.choices[0].message.content : data.content[0].text;
+                content = content.trim().replace(/^```json\n/, '').replace(/\n```$/, '');
+                
+                const updated = JSON.parse(content);
+                generatedMissions[index] = updated;
+                chatHistory.push({ role: 'assistant', content: 'Updated successfully!' });
+                render();
+            } catch (error) {
+                chatHistory.push({ role: 'assistant', content: `Error: ${error.message}` });
+                render();
+            }
         }
 
         render();
