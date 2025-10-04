@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microlearning Storyboard Generator</title>
+    <title>Syllabus to Missions Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50">
@@ -13,7 +13,8 @@
         let apiKey = '';
         let apiProvider = 'openai';
         let syllabusData = null;
-        let storyboardData = null;
+        let selectedTopics = [];
+        let generatedMissions = [];
         let isGenerating = false;
 
         function render() {
@@ -21,16 +22,16 @@
             app.innerHTML = `
                 <div class="min-h-screen">
                     <!-- Header -->
-                    <div class="bg-gradient-to-r from-purple-900 to-purple-800 text-white py-6 px-8 shadow-lg">
+                    <div class="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white py-6 px-8 shadow-lg">
                         <div class="max-w-7xl mx-auto">
-                            <h1 class="text-3xl font-bold">🎬 Microlearning Storyboard Generator</h1>
-                            <p class="text-purple-100 mt-1">Transform training syllabi into engaging micro-lessons</p>
+                            <h1 class="text-3xl font-bold">📚 Syllabus to Missions Generator</h1>
+                            <p class="text-indigo-100 mt-1">Transform training syllabi into production-ready microlearning missions</p>
                         </div>
                     </div>
 
                     <div class="max-w-7xl mx-auto p-8">
                         <!-- API Config -->
-                        <div class="bg-white rounded-lg shadow-md p-6 mb-6 border-l-4 border-purple-800">
+                        <div class="bg-white rounded-lg shadow-md p-6 mb-6 border-l-4 border-indigo-800">
                             <h2 class="text-xl font-semibold mb-4">⚙️ API Configuration</h2>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -43,7 +44,7 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">API Key *</label>
                                     <input type="password" id="apiKey" placeholder="Enter your API key" 
-                                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-800">
+                                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-800">
                                 </div>
                             </div>
                         </div>
@@ -62,7 +63,7 @@
                                     <textarea id="jsonPaste" rows="4" placeholder="Paste syllabus JSON here..."
                                               class="w-full px-4 py-2 border rounded-lg text-sm font-mono"></textarea>
                                     <button onclick="loadPastedJSON()" 
-                                            class="mt-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                                            class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
                                         Load JSON
                                     </button>
                                 </div>
@@ -71,98 +72,144 @@
                                 <div class="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
                                     <div class="font-semibold text-green-800">✓ Syllabus Loaded: ${syllabusData.course_title}</div>
                                     <p class="text-sm text-green-700 mt-1">
-                                        ${syllabusData.estimated_duration} | ${syllabusData.objectives?.length || 0} objectives
+                                        ${syllabusData.curriculum?.length || 0} curriculum topics available
                                     </p>
                                 </div>
                             ` : ''}
                         </div>
 
-                        <!-- Generate Button -->
-                        ${syllabusData && !storyboardData ? `
-                            <button onclick="generateStoryboard()" 
-                                    ${isGenerating ? 'disabled' : ''}
-                                    class="w-full py-4 bg-gradient-to-r from-purple-900 to-purple-800 text-white rounded-lg font-semibold text-lg hover:from-purple-800 hover:to-purple-700 shadow-md disabled:opacity-50 mb-6">
-                                ${isGenerating ? '⏳ Generating Storyboard...' : '🎬 Generate Microlearning Storyboard'}
-                            </button>
+                        <!-- Topic Selection -->
+                        ${syllabusData && !generatedMissions.length ? `
+                            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                                <h2 class="text-xl font-semibold mb-4">✅ Step 2: Select Topics to Generate</h2>
+                                <p class="text-sm text-gray-600 mb-4">Select which curriculum topics to generate as missions (max 9 min each)</p>
+                                <div class="space-y-3">
+                                    ${syllabusData.curriculum.map((topic, idx) => `
+                                        <label class="flex items-start space-x-3 p-3 border rounded hover:bg-gray-50 cursor-pointer">
+                                            <input type="checkbox" 
+                                                   id="topic-${idx}"
+                                                   onchange="toggleTopic(${idx})"
+                                                   class="mt-1 w-5 h-5 text-indigo-600 rounded">
+                                            <div>
+                                                <div class="font-medium text-gray-800">${topic}</div>
+                                                <div class="text-xs text-gray-500">Mission ${idx + 1}</div>
+                                            </div>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                                <button onclick="generateMissions()" 
+                                        ${isGenerating || selectedTopics.length === 0 ? 'disabled' : ''}
+                                        class="mt-6 w-full py-4 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-lg font-semibold text-lg hover:from-indigo-800 hover:to-indigo-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                                    ${isGenerating ? '⏳ Generating Missions...' : `🚀 Generate ${selectedTopics.length} Mission${selectedTopics.length !== 1 ? 's' : ''}`}
+                                </button>
+                            </div>
                         ` : ''}
 
-                        <!-- Storyboard Display -->
-                        ${storyboardData ? `
+                        <!-- Generated Missions -->
+                        ${generatedMissions.length > 0 ? `
                             <div class="space-y-6">
-                                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-purple-800">
+                                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-indigo-800">
                                     <div class="flex justify-between items-start mb-4">
                                         <div>
-                                            <h2 class="text-2xl font-bold text-purple-900">✓ Storyboard Generated</h2>
-                                            <p class="text-gray-600">${storyboardData.total_slides} slides | ${storyboardData.target_duration_seconds}s target</p>
+                                            <h2 class="text-2xl font-bold text-indigo-900">✓ Missions Generated</h2>
+                                            <p class="text-gray-600">${generatedMissions.length} mission${generatedMissions.length !== 1 ? 's' : ''} ready for production</p>
                                         </div>
                                         <div class="flex gap-3">
-                                            <button onclick="downloadJSON()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                                                ⬇️ JSON
+                                            <button onclick="downloadAllJSON()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                                ⬇️ All JSON
                                             </button>
-                                            <button onclick="downloadCSV()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-                                                ⬇️ CSV
+                                            <button onclick="downloadAllText()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                                                ⬇️ All Text
                                             </button>
                                         </div>
-                                    </div>
-                                    <div class="bg-purple-50 p-4 rounded">
-                                        <h3 class="font-semibold text-purple-900">${storyboardData.course_title}</h3>
                                     </div>
                                 </div>
 
-                                ${storyboardData.slides.map((slide, idx) => `
-                                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-400">
-                                        <div class="flex items-center gap-3 mb-4">
-                                            <div class="bg-purple-100 text-purple-800 font-bold rounded-full w-10 h-10 flex items-center justify-center">
-                                                ${slide.slide_number}
-                                            </div>
+                                ${generatedMissions.map((mission, idx) => `
+                                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-400">
+                                        <div class="flex justify-between items-start mb-4">
                                             <div>
-                                                <h3 class="text-lg font-semibold">${slide.title}</h3>
-                                                <p class="text-sm text-gray-500">Layout: ${slide.layout} | ${slide.duration_seconds}s</p>
+                                                <h3 class="text-xl font-bold text-gray-800">Mission ${idx + 1}: ${mission.mission_title}</h3>
+                                                <p class="text-sm text-gray-600 mt-1">${mission.slides?.length || 0} slides | Est. ${Math.round((mission.slides?.length || 0) * 37.5 / 60 * 10) / 10} min</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button onclick="downloadMissionJSON(${idx})" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                                    JSON
+                                                </button>
+                                                <button onclick="downloadMissionText(${idx})" class="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600">
+                                                    Text
+                                                </button>
+                                                <button onclick="downloadMissionCSV(${idx})" class="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600">
+                                                    CSV
+                                                </button>
                                             </div>
                                         </div>
-                                        <div class="space-y-3">
-                                            <div>
-                                                <h4 class="text-sm font-semibold text-gray-700 mb-1">On-Screen Points:</h4>
-                                                <ul class="list-disc list-inside text-sm text-gray-700">
-                                                    ${slide.on_screen_points.map(p => `<li>${p}</li>`).join('')}
-                                                </ul>
+
+                                        <div class="space-y-4">
+                                            <div class="bg-gray-50 p-4 rounded">
+                                                <h4 class="font-semibold text-gray-800 mb-2">Introduction</h4>
+                                                <p class="text-sm text-gray-700">${mission.introduction}</p>
                                             </div>
+
                                             <div>
-                                                <h4 class="text-sm font-semibold text-gray-700 mb-1">Voiceover Script:</h4>
-                                                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded">${slide.script}</p>
-                                                <p class="text-xs text-gray-500 mt-1">Word count: ${slide.script.split(/\s+/).length}</p>
+                                                <h4 class="font-semibold text-gray-800 mb-2">Slide Outline</h4>
+                                                <div class="overflow-x-auto">
+                                                    <table class="w-full text-sm border">
+                                                        <thead class="bg-gray-100">
+                                                            <tr>
+                                                                <th class="border px-3 py-2 text-left">Slide</th>
+                                                                <th class="border px-3 py-2 text-left">Title</th>
+                                                                <th class="border px-3 py-2 text-left">Bullets</th>
+                                                                <th class="border px-3 py-2 text-left">Voice-Over Prompt</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            ${mission.slides.map((slide, i) => `
+                                                                <tr>
+                                                                    <td class="border px-3 py-2">${i + 1}</td>
+                                                                    <td class="border px-3 py-2 font-medium">${slide.title}</td>
+                                                                    <td class="border px-3 py-2">${slide.bullets.join('<br>')}</td>
+                                                                    <td class="border px-3 py-2 text-gray-600">${slide.voiceover_prompt}</td>
+                                                                </tr>
+                                                            `).join('')}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div class="bg-blue-50 p-4 rounded">
+                                                    <h4 class="font-semibold text-gray-800 mb-2">Learner Steps</h4>
+                                                    <ul class="text-sm text-gray-700 space-y-1">
+                                                        ${mission.learner_steps.map(step => `<li>• ${step}</li>`).join('')}
+                                                    </ul>
+                                                </div>
+
+                                                <div class="bg-green-50 p-4 rounded">
+                                                    <h4 class="font-semibold text-gray-800 mb-2">Habits</h4>
+                                                    <ul class="text-sm text-gray-700 space-y-1">
+                                                        ${mission.habits.daily ? `<li>• <strong>Daily:</strong> ${mission.habits.daily}</li>` : ''}
+                                                        ${mission.habits.weekly ? `<li>• <strong>Weekly:</strong> ${mission.habits.weekly}</li>` : ''}
+                                                        ${mission.habits.monthly ? `<li>• <strong>Monthly:</strong> ${mission.habits.monthly}</li>` : ''}
+                                                        ${mission.habits.quarterly ? `<li>• <strong>Quarterly:</strong> ${mission.habits.quarterly}</li>` : ''}
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            <div class="bg-purple-50 p-4 rounded">
+                                                <h4 class="font-semibold text-gray-800 mb-2">Chat Prompt</h4>
+                                                <p class="text-sm text-gray-700">${mission.chat_prompt}</p>
+                                            </div>
+
+                                            <div class="bg-orange-50 p-4 rounded">
+                                                <h4 class="font-semibold text-gray-800 mb-2">Mentor Questions</h4>
+                                                <ul class="text-sm text-gray-700 space-y-1">
+                                                    ${mission.mentor_questions.map(q => `<li>• ${q}</li>`).join('')}
+                                                </ul>
                                             </div>
                                         </div>
                                     </div>
                                 `).join('')}
-
-                                <div class="bg-white rounded-lg shadow-md p-6">
-                                    <h3 class="font-semibold text-gray-800 mb-3">Storyboard Summary</h3>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div class="bg-blue-50 p-4 rounded">
-                                            <div class="text-2xl font-bold text-blue-800">${storyboardData.slides.length}</div>
-                                            <div class="text-sm text-blue-600">Total Slides</div>
-                                        </div>
-                                        <div class="bg-green-50 p-4 rounded">
-                                            <div class="text-2xl font-bold text-green-800">
-                                                ${storyboardData.slides.reduce((s, sl) => s + sl.duration_seconds, 0)}s
-                                            </div>
-                                            <div class="text-sm text-green-600">Total Duration</div>
-                                        </div>
-                                        <div class="bg-purple-50 p-4 rounded">
-                                            <div class="text-2xl font-bold text-purple-800">
-                                                ${Math.round(storyboardData.slides.reduce((s, sl) => s + sl.duration_seconds, 0) / 60 * 10) / 10}m
-                                            </div>
-                                            <div class="text-sm text-purple-600">Minutes</div>
-                                        </div>
-                                        <div class="bg-orange-50 p-4 rounded">
-                                            <div class="text-2xl font-bold text-orange-800">
-                                                ${storyboardData.slides.reduce((s, sl) => s + sl.script.split(/\s+/).length, 0)}
-                                            </div>
-                                            <div class="text-sm text-orange-600">Total Words</div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         ` : ''}
                     </div>
@@ -200,10 +247,11 @@
                 reader.onload = (e) => {
                     try {
                         syllabusData = JSON.parse(e.target.result);
-                        storyboardData = null;
+                        selectedTopics = [];
+                        generatedMissions = [];
                         render();
                     } catch (error) {
-                        alert('Error parsing JSON file: ' + error.message);
+                        alert('Error parsing JSON: ' + error.message);
                     }
                 };
                 reader.readAsText(file);
@@ -218,154 +266,206 @@
             }
             try {
                 syllabusData = JSON.parse(jsonText);
-                storyboardData = null;
+                selectedTopics = [];
+                generatedMissions = [];
                 render();
             } catch (error) {
                 alert('Error parsing JSON: ' + error.message);
             }
         }
 
-        async function generateStoryboard() {
+        function toggleTopic(index) {
+            const checkbox = document.getElementById(`topic-${index}`);
+            if (checkbox.checked) {
+                selectedTopics.push(index);
+            } else {
+                selectedTopics = selectedTopics.filter(i => i !== index);
+            }
+            render();
+        }
+
+        async function generateMissions() {
             if (!apiKey) {
                 alert('Please enter your API key');
                 return;
             }
 
-            if (!syllabusData) {
-                alert('Please upload or paste a syllabus JSON');
+            if (selectedTopics.length === 0) {
+                alert('Please select at least one topic');
                 return;
             }
 
             isGenerating = true;
             render();
 
-            const prompt = `You are an instructional design expert creating micro-learning storyboards.
+            generatedMissions = [];
 
-Given this training syllabus, create a 3-5 minute micro-learning lesson storyboard.
+            for (const topicIndex of selectedTopics) {
+                const topic = syllabusData.curriculum[topicIndex];
+                
+                const prompt = `You are an expert instructional designer creating microlearning missions.
 
-SYLLABUS:
-${JSON.stringify(syllabusData, null, 2)}
+Create a production-ready mission document for this training topic:
 
-REQUIREMENTS:
-- 8-12 slides total
-- 180-300 seconds total duration
-- 20-30 seconds per slide
-- 30-70 words on-screen per slide
-- 60-90 words script per slide
-- Natural conversational voiceover
+SYLLABUS CONTEXT:
+Course: ${syllabusData.course_title}
+Overall Objectives: ${syllabusData.objectives.join(', ')}
+Target Audience: ${syllabusData.target_audience}
+Training Method: ${syllabusData.training_method}
 
-SLIDE STRUCTURE:
-1. Title - introduce course and audience
-2. Why it matters - 2 key points
-3. Objectives overview - list 3-4 objectives
-4-6. Individual objectives - one per slide with 2-3 key ideas
-7. Module highlights - 2-4 curriculum items
-8. Try it now - 3 practical steps
-9. Prerequisites (optional)
-10. Tools/Materials (optional)
-11. Recap - summarize objectives
-12. Call to action - next steps
+TOPIC TO DEVELOP:
+${topic}
 
-Return ONLY this JSON structure:
+MISSION REQUIREMENTS:
+- Max 9 minutes (12-18 slides at 30-45 seconds each)
+- Adapt slide flow based on content type (conceptual vs. procedural vs. behavioral)
+- Voice-over prompts should be reflective questions, NOT full scripts
+
+Generate a JSON object with this EXACT structure:
 {
-  "course_title": "from syllabus",
-  "target_duration_seconds": 240,
-  "total_slides": 10,
+  "mission_title": "Clear, compelling title for this topic",
+  "introduction": "2-3 sentence paragraph introducing the topic and why it matters",
   "slides": [
     {
       "slide_number": 1,
-      "id": "title",
-      "layout": "title",
-      "title": "slide title",
-      "on_screen_points": ["bullet 1", "bullet 2"],
-      "script": "natural voiceover 60-90 words",
-      "duration_seconds": 25
+      "title": "Slide title",
+      "bullets": ["Bullet 1", "Bullet 2", "Bullet 3"],
+      "voiceover_prompt": "Reflective question or thinking prompt"
     }
-  ]
-}`;
+  ],
+  "learner_steps": [
+    "Read the material in this mission",
+    "Watch the presentation video (5-7 minutes)",
+    "Interact with the chat activity",
+    "Reflect on and answer the mentor questions"
+  ],
+  "chat_prompt": "One engaging question about applying this topic",
+  "mentor_questions": [
+    "Question 1 about application",
+    "Question 2 about challenges",
+    "Question 3 about implementation",
+    "Question 4 about making it sustainable"
+  ],
+  "habits": {
+    "daily": "Daily habit suggestion or null",
+    "weekly": "Weekly habit suggestion or null", 
+    "monthly": "Monthly habit suggestion or null",
+    "quarterly": "Quarterly habit suggestion or null"
+  }
+}
 
-            try {
-                let response;
+CRITICAL: Return ONLY valid JSON, no other text.`;
 
-                if (apiProvider === 'openai') {
-                    response = await fetch('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: [
-                                { role: 'system', content: 'You are an expert instructional designer. Always respond with valid JSON only.' },
-                                { role: 'user', content: prompt }
-                            ],
-                            temperature: 0.7
-                        })
-                    });
-                } else {
-                    response = await fetch('https://api.anthropic.com/v1/messages', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': apiKey,
-                            'anthropic-version': '2023-06-01'
-                        },
-                        body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
-                            max_tokens: 4096,
-                            messages: [{ role: 'user', content: prompt }]
-                        })
-                    });
+                try {
+                    let response;
+
+                    if (apiProvider === 'openai') {
+                        response = await fetch('https://api.openai.com/v1/chat/completions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: 'gpt-4o',
+                                messages: [
+                                    { role: 'system', content: 'You are an expert instructional designer. Always respond with valid JSON only.' },
+                                    { role: 'user', content: prompt }
+                                ],
+                                temperature: 0.7
+                            })
+                        });
+                    } else {
+                        response = await fetch('https://api.anthropic.com/v1/messages', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': apiKey,
+                                'anthropic-version': '2023-06-01'
+                            },
+                            body: JSON.stringify({
+                                model: 'claude-sonnet-4-20250514',
+                                max_tokens: 4096,
+                                messages: [{ role: 'user', content: prompt }]
+                            })
+                        });
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`API Error ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    let content = apiProvider === 'openai' 
+                        ? data.choices[0].message.content 
+                        : data.content[0].text;
+
+                    content = content.trim();
+                    if (content.startsWith('```json')) {
+                        content = content.replace(/^```json\n/, '').replace(/\n```$/, '');
+                    } else if (content.startsWith('```')) {
+                        content = content.replace(/^```\n/, '').replace(/\n```$/, '');
+                    }
+
+                    const mission = JSON.parse(content);
+                    generatedMissions.push(mission);
+
+                } catch (error) {
+                    alert(`Error generating mission ${topicIndex + 1}: ${error.message}`);
+                    break;
                 }
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`API Error ${response.status}: ${errorText}`);
-                }
-
-                const data = await response.json();
-                let content = apiProvider === 'openai' 
-                    ? data.choices[0].message.content 
-                    : data.content[0].text;
-
-                // Clean markdown
-                content = content.trim();
-                if (content.startsWith('```json')) {
-                    content = content.replace(/^```json\n/, '').replace(/\n```$/, '');
-                } else if (content.startsWith('```')) {
-                    content = content.replace(/^```\n/, '').replace(/\n```$/, '');
-                }
-
-                storyboardData = JSON.parse(content);
-                isGenerating = false;
-                render();
-            } catch (error) {
-                isGenerating = false;
-                alert(`Error: ${error.message}\n\nCheck:\n1. API key is correct\n2. You have credits available\n3. Network connection`);
-                render();
             }
+
+            isGenerating = false;
+            render();
         }
 
-        function downloadJSON() {
-            const blob = new Blob([JSON.stringify(storyboardData, null, 2)], { type: 'application/json' });
+        function downloadMissionJSON(index) {
+            const mission = generatedMissions[index];
+            const blob = new Blob([JSON.stringify(mission, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Storyboard_${storyboardData.course_title.replace(/\s+/g, '_')}.json`;
+            a.download = `Mission_${index + 1}_${mission.mission_title.replace(/\s+/g, '_')}.json`;
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        function downloadCSV() {
-            const headers = ['Slide #', 'Title', 'Layout', 'On-Screen Points', 'Script', 'Duration (sec)'];
-            const rows = storyboardData.slides.map(s => [
-                s.slide_number,
+        function downloadMissionText(index) {
+            const mission = generatedMissions[index];
+            let text = `Mission ${index + 1}: ${mission.mission_title}\n\n`;
+            text += `Introduction\n${mission.introduction}\n\n`;
+            text += `Slide Outline\n`;
+            text += `Slide\tTitle\tSlide Bullets\tVoice-Over Prompt\n`;
+            mission.slides.forEach((slide, i) => {
+                text += `${i + 1}\t${slide.title}\t${slide.bullets.join('\n')}\t${slide.voiceover_prompt}\n`;
+            });
+            text += `\nLearner Steps\n${mission.learner_steps.map(s => '• ' + s).join('\n')}\n\n`;
+            text += `Chat Prompt\n${mission.chat_prompt}\n\n`;
+            text += `Mentor Questions\n${mission.mentor_questions.map(q => '• ' + q).join('\n')}\n\n`;
+            text += `Habits\n`;
+            if (mission.habits.daily) text += `• Daily: ${mission.habits.daily}\n`;
+            if (mission.habits.weekly) text += `• Weekly: ${mission.habits.weekly}\n`;
+            if (mission.habits.monthly) text += `• Monthly: ${mission.habits.monthly}\n`;
+            if (mission.habits.quarterly) text += `• Quarterly: ${mission.habits.quarterly}\n`;
+
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Mission_${index + 1}_${mission.mission_title.replace(/\s+/g, '_')}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadMissionCSV(index) {
+            const mission = generatedMissions[index];
+            const headers = ['Slide', 'Title', 'Slide Bullets', 'Voice-Over Prompt'];
+            const rows = mission.slides.map((s, i) => [
+                i + 1,
                 s.title,
-                s.layout,
-                s.on_screen_points.join(' | '),
-                s.script,
-                s.duration_seconds
+                s.bullets.join(' | '),
+                s.voiceover_prompt
             ]);
 
             const csv = [
@@ -377,12 +477,51 @@ Return ONLY this JSON structure:
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Storyboard_${storyboardData.course_title.replace(/\s+/g, '_')}.csv`;
+            a.download = `Mission_${index + 1}_Slides_${mission.mission_title.replace(/\s+/g, '_')}.csv`;
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        // Initial render
+        function downloadAllJSON() {
+            const blob = new Blob([JSON.stringify(generatedMissions, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `All_Missions_${syllabusData.course_title.replace(/\s+/g, '_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadAllText() {
+            let allText = '';
+            generatedMissions.forEach((mission, index) => {
+                allText += `Mission ${index + 1}: ${mission.mission_title}\n\n`;
+                allText += `Introduction\n${mission.introduction}\n\n`;
+                allText += `Slide Outline\n`;
+                allText += `Slide\tTitle\tSlide Bullets\tVoice-Over Prompt\n`;
+                mission.slides.forEach((slide, i) => {
+                    allText += `${i + 1}\t${slide.title}\t${slide.bullets.join('\n')}\t${slide.voiceover_prompt}\n`;
+                });
+                allText += `\nLearner Steps\n${mission.learner_steps.map(s => '• ' + s).join('\n')}\n\n`;
+                allText += `Chat Prompt\n${mission.chat_prompt}\n\n`;
+                allText += `Mentor Questions\n${mission.mentor_questions.map(q => '• ' + q).join('\n')}\n\n`;
+                allText += `Habits\n`;
+                if (mission.habits.daily) allText += `• Daily: ${mission.habits.daily}\n`;
+                if (mission.habits.weekly) allText += `• Weekly: ${mission.habits.weekly}\n`;
+                if (mission.habits.monthly) allText += `• Monthly: ${mission.habits.monthly}\n`;
+                if (mission.habits.quarterly) allText += `• Quarterly: ${mission.habits.quarterly}\n`;
+                allText += '\n\n' + '='.repeat(80) + '\n\n';
+            });
+
+            const blob = new Blob([allText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `All_Missions_${syllabusData.course_title.replace(/\s+/g, '_')}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
         render();
     </script>
 </body>
