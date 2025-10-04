@@ -88,6 +88,7 @@
                                         <label class="flex items-start space-x-3 p-3 border rounded hover:bg-gray-50 cursor-pointer">
                                             <input type="checkbox" 
                                                    id="topic-${idx}"
+                                                   ${selectedTopics.includes(idx) ? 'checked' : ''}
                                                    onchange="toggleTopic(${idx})"
                                                    class="mt-1 w-5 h-5 text-indigo-600 rounded">
                                             <div>
@@ -275,11 +276,10 @@
         }
 
         function toggleTopic(index) {
-            const checkbox = document.getElementById(`topic-${index}`);
-            if (checkbox.checked) {
-                selectedTopics.push(index);
-            } else {
+            if (selectedTopics.includes(index)) {
                 selectedTopics = selectedTopics.filter(i => i !== index);
+            } else {
+                selectedTopics.push(index);
             }
             render();
         }
