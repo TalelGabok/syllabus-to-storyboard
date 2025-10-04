@@ -18,7 +18,8 @@
             isGenerating: false,
             currentMissionIndex: 0,
             editingIndex: null,
-            chatHistory: []
+            chatHistory: [],
+            isProcessingChat: false
         };
 
         function render() {
@@ -155,11 +156,16 @@
                         <div class="bg-gray-50 p-3 rounded mb-2 max-h-40 overflow-y-auto">
                             ${state.chatHistory.length === 0 ? '<p class="text-sm text-gray-500">Ask AI to revise...</p>' :
                               state.chatHistory.map(msg => `<div class="text-sm mb-1"><strong>${msg.role}:</strong> ${msg.content}</div>`).join('')}
+                            ${state.isProcessingChat ? '<div class="text-sm text-blue-600">⏳ AI is thinking...</div>' : ''}
                         </div>
                         <div class="flex gap-2">
                             <input type="text" id="chatInput" placeholder="e.g., Make slide 2 shorter"
-                                   class="flex-1 px-3 py-2 border rounded" onkeypress="if(event.key==='Enter')chat(${i})">
-                            <button onclick="chat(${i})" class="px-4 py-2 bg-green-600 text-white rounded">Send</button>
+                                   ${state.isProcessingChat ? 'disabled' : ''}
+                                   class="flex-1 px-3 py-2 border rounded disabled:bg-gray-100" onkeypress="if(event.key==='Enter')chat(${i})">
+                            <button onclick="chat(${i})" ${state.isProcessingChat ? 'disabled' : ''}
+                                    class="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">
+                                ${state.isProcessingChat ? 'Processing...' : 'Send'}
+                            </button>
                         </div>
                     </div>
 
@@ -279,6 +285,7 @@ Return JSON:
             if (!msg) return;
             
             state.chatHistory.push({role: 'user', content: msg});
+            state.isProcessingChat = true;
             input.value = '';
             render();
 
@@ -286,6 +293,7 @@ Return JSON:
             const updated = await callAI(prompt);
             state.missions[i] = updated;
             state.chatHistory.push({role: 'ai', content: 'Updated!'});
+            state.isProcessingChat = false;
             render();
         }
 
